@@ -1,0 +1,28 @@
+{
+  "configurations": [
+    {
+      "name": "Waspmote",
+      "includePath": [
+        "${workspaceFolder}/**",
+        "C:/Users/Jdany/Desktop/WaspMoteIde/hardware/waspmote/avr/cores/waspmote-api/**",
+        "C:/Users/Jdany/Desktop/WaspMoteIde/hardware/tools/avr/avr/include/**",
+        "C:/Users/Jdany/Desktop/WaspMoteIde/libraries/**"
+      ],
+      "defines": [
+        "_DEBUG",
+        "UNICODE",
+        "_UNICODE",
+        "F_CPU=14745600L",
+        "ARDUINO=10613",
+        "ARDUINO_AVR_WASP",
+        "ARDUINO_ARCH_AVR"
+      ],
+      "windowsSdkVersion": "10.0.18362.0",
+      "compilerPath": "C:/Users/Jdany/.platformio/packages/toolchain-atmelavr/bin/avr-g++.exe",
+      "cStandard": "c11",
+      "cppStandard": "c++17",
+      "intelliSenseMode": "gcc-x64"
+    }
+  ],
+  "version": 4
+}
