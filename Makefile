@@ -7,7 +7,7 @@ rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
 
 # Microcontroler for the Waspmote board 
 MMCU = atmega1281
-MCU_PORT ?= COM6
+MCU_PORT ?= COM17
 PROGRAMMER = stk500v1
 PROGRAMMER_BAUDRATE = 115200
 
@@ -15,14 +15,16 @@ PROGRAMMER_BAUDRATE = 115200
 WASPMOTE_LIBRARIES_DEP = Wasp4G.h smartWaterIons.h ArduinoJson.h
 WSP_LIB_FOLDER_DEP_PATH = $(foreach lib,${WASPMOTE_LIBRARIES_DEP},${WASPMOTE_LIBRARIES_PATH}/$(patsubst %.h,%,${lib}))
 CC_LIBH_INC = $(foreach lib,${WSP_LIB_FOLDER_DEP_PATH},$(call ADD_COMMAS, -I${lib}))
-CXX_INCLUDE_WASPMOTE_CORE = $(call ADD_COMMAS, -I${WASPMOTE_PATH})
+CXX_INCLUDE_WASPMOTE_CORE = $(call ADD_COMMAS, -I${WASPMOTE_CORE_PATH})
 
 LIB_FOLD_INC = ${CC_LIBH_INC} ${CXX_INCLUDE_WASPMOTE_CORE}
 
 # Paths
-WASPMOTE_LIBRARIES_PATH = C:/Users/Jdany/Desktop/WaspMoteIde/libraries
-WASPMOTE_PATH = C:/Users/Jdany/Desktop/WaspMoteIde/hardware/waspmote/avr/cores/waspmote-api
-AVR_COMPILTER_PATH = C:/Users/Jdany/.platformio/packages/toolchain-atmelavr/bin
+WASPMOTE_PATH = C:/Users/jpolanco/Desktop/Hardware/Waspmote
+WASPMOTE_LIBRARIES_PATH = ${WASPMOTE_PATH}/libraries
+WASPMOTE_CORE_PATH = ${WASPMOTE_PATH}/hardware/waspmote/avr/cores/waspmote-api
+WASPMOTE_AVRDUDE_CONF = ${WASPMOTE_PATH}/hardware/tools/avr/etc/avrdude.conf
+AVR_COMPILTER_PATH = C:/Users/jpolanco/.platformio/packages/toolchain-atmelavr/bin
 
 # Defines helpers
 AVRDUDE = avrdude
@@ -74,7 +76,7 @@ help:
 	@echo     Version: ${VERSION}
 
 # Tarjets to build the waspmote core
-WASPMOTE_FILES = $(filter %.c %.cpp, $(wildcard ${WASPMOTE_PATH}/*) $(wildcard ${WASPMOTE_PATH}/*/*))
+WASPMOTE_FILES = $(filter %.c %.cpp, $(wildcard ${WASPMOTE_CORE_PATH}/*) $(wildcard ${WASPMOTE_CORE_PATH}/*/*))
 WASPMOTE_C_FILES = $(filter %.c, ${WASPMOTE_FILES})
 WASPMOTE_C_OBJECTS = ${WASPMOTE_C_FILES:%=%.o}
 WASPMOTE_CPP_FILES = $(filter %.cpp, ${WASPMOTE_FILES})
@@ -160,10 +162,13 @@ build: ${OUTPUT_FLASH} check_size
 
 flash:
 	@echo ----- Subiendo firmware a la placa
-	@${AVRDUDE} -v -V -D -F -P${MCU_PORT} -p${MMCU} -c${PROGRAMMER} -b${PROGRAMMER_BAUDRATE} -Uflash:w:${BIN_FOLDER}/${OUTPUT_FLASH}:i
+	@${AVRDUDE} -C${WASPMOTE_AVRDUDE_CONF} -v -V -p${MMCU} -c${PROGRAMMER} -P${MCU_PORT} -b${PROGRAMMER_BAUDRATE}  -D -F  -Uflash:w:${BIN_FOLDER}/${OUTPUT_FLASH}:i
 
 update: build flash
 
 clean:
 	@echo ----- Borrando archivos temporales
 	@del obj\*.o obj\*.d obj\*.a bin\*.eep bin\*.elf bin\*.hex
+
+monitor:
+	@pio device monitor -b 115200 -p ${MCU_PORT} 
