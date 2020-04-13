@@ -12,7 +12,7 @@ PROGRAMMER = stk500v1
 PROGRAMMER_BAUDRATE = 115200
 
 # Sketch libraries dependencies
-WASPMOTE_LIBRARIES_DEP = 
+WASPMOTE_LIBRARIES_DEP = Wasp4G.h smartWaterIons.h ArduinoJson.h
 WSP_LIB_FOLDER_DEP_PATH = $(foreach lib,${WASPMOTE_LIBRARIES_DEP},${WASPMOTE_LIBRARIES_PATH}/$(patsubst %.h,%,${lib}))
 CC_LIBH_INC = $(foreach lib,${WSP_LIB_FOLDER_DEP_PATH},$(call ADD_COMMAS, -I${lib}))
 CXX_INCLUDE_WASPMOTE_CORE = $(call ADD_COMMAS, -I${WASPMOTE_PATH})
@@ -36,7 +36,7 @@ AVR_SIZE = $(call ADD_COMMAS, ${AVR_COMPILTER_PATH}/avr-size.exe)
 CXX_FLAGS = -c -g -Os -w -ffunction-sections -fdata-sections -MMD -mmcu=atmega1281 
 BUILD_DEFINES = -DF_CPU=14745600L -DARDUINO=10613 -DARDUINO_AVR_WASP -DARDUINO_ARCH_AVR
 INCLUDE_HEADER_COMPILE = ${LIB_FOLD_INC}
-CPP_FLAGS = -std=gnu++11 -fno-exceptions -fno-threadsafe-statics
+CPP_FLAGS = -std=gnu++11 -fno-exceptions -fno-threadsafe-statics -felide-constructors
 C_FLAGS = -std=gnu11
 LINKER_FLAGS = rcs
 AVR_SIZE_FLAGS = -C --mcu=${MMCU} 
@@ -49,7 +49,7 @@ LINKER = ${AVR_LINKER} ${LINKER_FLAGS}
 SRC_FOLDER = ./src
 OBJ_FOLDER = ./obj
 BIN_FOLDER = ./bin
-MAIN_FILENAME = test.cpp
+MAIN_FILENAME = firmware.cpp
 
 MAIN_FILE = ${SRC_FOLDER}/${MAIN_FILENAME}
 
@@ -132,7 +132,7 @@ EEPROM_LINK_FLAGS = -O ihex -j .eeprom --set-section-flags=.eeprom=alloc,load --
 HEX_LINK_FLAGS = -O ihex -R .eeprom
 
 say_source:
-	@echo ----- Compilando sketch
+	@echo ----- Compilando source
 
 ${MAIN_FILENAME}.o: say_source
 	@echo Compiling "${MAIN_FILE_OBJ_OUTPUT}"
