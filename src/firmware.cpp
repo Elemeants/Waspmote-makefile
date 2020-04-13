@@ -3,6 +3,8 @@
 #include <smartWaterIons.h>
 #include <ArduinoJson.h>
 
+#define PYTHON_GRAPH_OUT_ENABLE true
+
 #define CONCENTRATION_ION_POINT_1 0.5F
 #define CONCENTRATION_ION_POINT_2 150.0F
 #define CONCENTRATION_ION_POINT_3 2000.0F
@@ -35,7 +37,7 @@
 // Global static resource for output data
 char http_data[512];
 
-#define CONCENTRATION_CALCULATION_MINUTES 8
+#define CONCENTRATION_CALCULATION_MINUTES 30
 #define SECONDS_TO_MILIS(milis) (milis * 1000.0f)
 #define MINUTES_TO_SECONDS(min) (min * 60.0f)
 
@@ -46,11 +48,11 @@ void updateTime();
 void updateIonsConcentration();
 void sendDataToServer();
 void getTimeFrom4G();
-void awaitTimeBackground(long _delay, void (*process)(void));
-void ionsProcessFunc();
+void awaitTimeBackground(long _delay, void (*process)(long));
+bool timeoutFunction(long timeout, bool (*process)(long));
+void ionsProcessFunc(long);
 void addMeasureToArray(JsonArray &arr, float _measure, const __FlashStringHelper *code);
 void buildMeasuresJson();
-void readMeasures();
 
 typedef enum
 {
@@ -66,6 +68,7 @@ private:
   ionSensorClass internal;
   IonSocket_e _socket;
   float internalMeasure;
+  float _voltage;
 
 public:
   GenericIonSensor(IonSocket_e socket, float v_points[], float c_points[], uint8_t noPoints)
@@ -73,15 +76,24 @@ public:
   {
     internal.setCalibrationPoints(v_points, c_points, noPoints);
   }
-  float read() { return internal.read(); }
+  float read()
+  {
+    _voltage = internal.read();
+    return _voltage;
+  }
   float calculateConcentration()
   {
-    internalMeasure = internal.calculateConcentration(read());
-    return calculateConcentration();
+    float rawLecture = read();
+    internalMeasure = internal.calculateConcentration(rawLecture);
+    return internalMeasure;
   }
   float concentration() const
   {
     return internalMeasure;
+  }
+  float voltage() const
+  {
+    return _voltage;
   }
 };
 
@@ -95,13 +107,11 @@ public:
 
   void printStatus()
   {
-    USB.print(F("    Battery: [ "));
-    USB.print(getChargePercent());
+    USB.print(F("       Battery: ["));
+    USB.print(getChargePercent(), DEC);
     USB.print(F("%, "));
     USB.print(getVoltage());
     USB.print(F("V, "));
-    USB.print(getCurrent());
-    USB.print(F("mA, "));
     USB.print(isCharging() ? F(" charging") : F(" discharging"));
     USB.println(F("]"));
   }
@@ -111,14 +121,19 @@ class TemperatureInfo
 {
 private:
   pt1000Class tempSensor;
+  float temperature;
 
 public:
-  float read() { return tempSensor.read(); }
+  float read()
+  {
+    temperature = tempSensor.read();
+    return temperature;
+  }
 
   void printStatus()
   {
-    USB.print(F("    Temperature: "));
-    USB.print(read());
+    USB.print(F("   Temperature: "));
+    USB.print(temperature);
     USB.println(F("°C"));
   }
 };
@@ -126,11 +141,13 @@ public:
 struct IonMeasures
 {
 private:
-  void printConcentration(const __FlashStringHelper *name, float concentration)
+  void printConcentration(const __FlashStringHelper *name, float concentration, float rawVoltage)
   {
     USB.print(name);
     USB.print(concentration);
-    USB.println(F("ppm"));
+    USB.print(F("ppm - "));
+    USB.print(rawVoltage);
+    USB.println(F("mV"));
   }
 
 public:
@@ -139,6 +156,10 @@ public:
   float potassiumConcentration;
   float temperature;
   uint8_t batteryLevel;
+
+  float calciumVoltage;
+  float nitrateVoltage;
+  float potassiumVoltage;
 
   void addMeasuresToJson(JsonArray &measures)
   {
@@ -151,10 +172,18 @@ public:
 
   void serializeToUSB()
   {
-    USB.println(F(" Ion measures -----------------------------------"));
-    printConcentration(F("       Calcium: "), calciumConcentration);
-    printConcentration(F("       Nitrate: "), nitrateConcentration);
-    printConcentration(F("     Potassium: "), potassiumConcentration);
+#if PYTHON_GRAPH_OUT_ENABLE
+    USB.print(calciumVoltage);
+    USB.print(" ");
+    USB.print(nitrateVoltage);
+    USB.print(" ");
+    USB.println(potassiumVoltage);
+#else
+    USB.println(F(" Ion measures ---------------------------------------------"));
+    printConcentration(F("       Calcium: "), calciumConcentration, calciumVoltage);
+    printConcentration(F("       Nitrate: "), nitrateConcentration, nitrateVoltage);
+    printConcentration(F("     Potassium: "), potassiumConcentration, potassiumVoltage);
+#endif // PYTHON_GRAPH_OUT_ENABLE
   }
 };
 
@@ -177,9 +206,9 @@ float ionPotassiumVoltage[ION_NO_POINTS] = {
 
 GenericIonSensor calciumSensor(ION_SOCKET_A, ionCalciumVoltage, ionConcentrationPoints, ION_NO_POINTS);
 GenericIonSensor nitrateSensor(ION_SOCKET_B, ionNitrateVoltage, ionConcentrationPoints, ION_NO_POINTS);
-GenericIonSensor potassiumSensor(ION_SOCKET_C, ionPotassiumVoltage, ionConcentrationPoints, ION_NO_POINTS);
+GenericIonSensor potassiumSensor(ION_SOCKET_D, ionPotassiumVoltage, ionConcentrationPoints, ION_NO_POINTS);
 
-GenericIonSensor ionSensorsBus[NO_ION_SENSORS] = {calciumSensor, nitrateSensor, potassiumSensor};
+GenericIonSensor *ionSensorsBus[NO_ION_SENSORS] = {&calciumSensor, &nitrateSensor, &potassiumSensor};
 
 StaticJsonDocument<1024> jsonDocument;
 BatteryInfo Battery;
@@ -190,9 +219,17 @@ IonMeasures measures;
 
 void setup()
 {
+#if !PYTHON_GRAPH_OUT_ENABLE
+  USB.println(F("Configuring ION..."));
+#endif
   configure();
+#if !PYTHON_GRAPH_OUT_ENABLE
+  USB.println(F("Reading ION..."));
+#endif
   awaitTimeBackground(MINUTES_TO_MILLIS(CONCENTRATION_CALCULATION_MINUTES), ionsProcessFunc);
+  USB.println(F("Creating json output"));
   buildMeasuresJson();
+  USB.println(F("Posting to server data"));
   sendDataToServer();
   PWR.deepSleep("31:00:00:00", RTC_OFFSET, RTC_ALM1_MODE1, ALL_OFF);
 }
@@ -202,13 +239,23 @@ void loop() {}
 void configure()
 {
   USB.ON();
+#if !PYTHON_GRAPH_OUT_ENABLE
+  USB.println(F("   RTC: ON"));
   RTC.ON();
+  USB.println(F("   4G: ON"));
   _4G.ON();
   _4G.set_APN(_4G_APN_HOST, _4G_APN_USER, _4G_APN_PASS);
+#endif
+#if !PYTHON_GRAPH_OUT_ENABLE
+  USB.println(F("   SmartWaterBoard: ON"));
+#endif
   SWIonsBoard.ON();
   pinMode(DIGITAL8, OUTPUT);
   digitalWrite(DIGITAL8, LOW);
+#if !PYTHON_GRAPH_OUT_ENABLE
+  USB.println(F("   Get time from 4G"));
   getTimeFrom4G();
+#endif
 }
 
 void updateTime()
@@ -222,16 +269,17 @@ void updateTime()
   Time.month = RTC.month;
   Time.year = RTC.year;
 
-  for (size_t i = 0; i < 50; i++) timeString[i] = 0x00;
+  for (size_t i = 0; i < 50; i++)
+    timeString[i] = 0x00;
   sprintf(timeString, "20%i-%02i-%02iT%02i:%02i:%02iZ",
-    Time.year, Time.month, Time.day, Time.hour, Time.minute, Time.second);
+          Time.year, Time.month, Time.day, Time.hour, Time.minute, Time.second);
 }
 
 void updateIonsConcentration()
 {
   for (uint8_t i = 0; i < NO_ION_SENSORS; i++)
   {
-    ionSensorsBus[i].calculateConcentration();
+    ionSensorsBus[i]->calculateConcentration();
   }
 }
 
@@ -243,21 +291,79 @@ void sendDataToServer()
 
 void getTimeFrom4G()
 {
+  timeoutFunction(MINUTES_TO_MILLIS(1), [](long time) -> bool {
+    return !_4G.checkConnection(1);
+  });
   _4G.setTimeFrom4G();
 }
 
-void awaitTimeBackground(long _delay, void (*process)(void))
+void awaitTimeBackground(long _delay, void (*process)(long))
 {
   long start_time = millis();
-  while ((millis() - start_time) < _delay)
+  long actual_time = millis();
+  while ((actual_time - start_time) < _delay)
   {
-    process();
+    process(_delay - (actual_time - start_time));
+    actual_time = millis();
   }
 }
 
-void ionsProcessFunc()
+bool timeoutFunction(long timeout, bool (*process)(long))
 {
-  readMeasures();
+  long start_time = millis();
+  long actual_time = millis();
+  while ((actual_time - start_time) < timeout)
+  {
+#if !PYTHON_GRAPH_OUT_ENABLE
+    if (process(timeout - (actual_time - start_time)))
+#else
+    if (process((actual_time - start_time)))
+#endif
+    {
+      return true;
+    }
+    actual_time = millis();
+  }
+  return false;
+}
+
+void ionsProcessFunc(long restingTime)
+{
+#if !PYTHON_GRAPH_OUT_ENABLE
+  USB.println(F(" Update ion concentration measures"));
+#endif
+  updateIonsConcentration();
+
+  measures.calciumConcentration = calciumSensor.concentration();
+  measures.calciumVoltage = calciumSensor.voltage();
+  measures.nitrateConcentration = nitrateSensor.concentration();
+  measures.nitrateVoltage = nitrateSensor.voltage();
+  measures.potassiumConcentration = potassiumSensor.concentration();
+  measures.potassiumVoltage = potassiumSensor.voltage();
+  measures.batteryLevel = Battery.getChargePercent();
+  measures.temperature = Temperature.read();
+
+#if !PYTHON_GRAPH_OUT_ENABLE
+  if (restingTime < 0)
+  {
+    USB.println(F(" Resting seconds: 0s"));
+  }
+  else
+  {
+    USB.print(F(" Resting seconds: "));
+    USB.print(restingTime / 1000);
+    USB.println(F("s"));
+  }
+#else
+  USB.print(restingTime);
+  USB.print(" ");
+#endif
+  measures.serializeToUSB();
+#if !PYTHON_GRAPH_OUT_ENABLE
+  Battery.printStatus();
+  Temperature.printStatus();
+  USB.println();
+#endif
 }
 
 void addMeasureToArray(JsonArray &arr, float _measure, const __FlashStringHelper *code)
@@ -278,19 +384,4 @@ void buildMeasuresJson()
 
   serializeJson(jsonDocument, http_data);
   jsonDocument.clear();
-}
-
-void readMeasures()
-{
-  updateIonsConcentration();
-
-  measures.calciumConcentration = calciumSensor.concentration();
-  measures.nitrateConcentration = calciumSensor.concentration();
-  measures.potassiumConcentration = calciumSensor.concentration();
-  measures.batteryLevel = Battery.getChargePercent();
-  measures.temperature = Temperature.read();
-
-  measures.serializeToUSB();
-  Battery.printStatus();
-  Temperature.printStatus();
 }
