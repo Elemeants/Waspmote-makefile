@@ -20,7 +20,11 @@ CXX_INCLUDE_WASPMOTE_CORE = $(call ADD_COMMAS, -I${WASPMOTE_CORE_PATH})
 LIB_FOLD_INC = ${CC_LIBH_INC} ${CXX_INCLUDE_WASPMOTE_CORE}
 
 # Paths
+ifeq ($(OS),Windows_NT)
 WASPMOTE_PATH = C:/Users/jpolanco/Desktop/Hardware/Waspmote
+else
+WASPMOTE_PATH = /mnt/c/Users/jpolanco/Desktop/Hardware/Waspmote
+endif
 WASPMOTE_LIBRARIES_PATH = ${WASPMOTE_PATH}/libraries
 WASPMOTE_CORE_PATH = ${WASPMOTE_PATH}/hardware/waspmote/avr/cores/waspmote-api
 WASPMOTE_AVRDUDE_CONF = ${WASPMOTE_PATH}/hardware/tools/avr/etc/avrdude.conf
@@ -28,11 +32,19 @@ AVR_COMPILTER_PATH = C:/Users/jpolanco/.platformio/packages/toolchain-atmelavr/b
 
 # Defines helpers
 AVRDUDE = avrdude
+ifeq ($(OS),Windows_NT)
 OBJ_COPY =  $(call ADD_COMMAS, ${AVR_COMPILTER_PATH}/avr-objcopy.exe)
 AVR_LINKER = $(call ADD_COMMAS, ${AVR_COMPILTER_PATH}/avr-ar.exe)
 CPP_COMPILER = $(call ADD_COMMAS, ${AVR_COMPILTER_PATH}/avr-g++.exe)
 C_COMPILER = $(call ADD_COMMAS, ${AVR_COMPILTER_PATH}/avr-gcc.exe)
 AVR_SIZE = $(call ADD_COMMAS, ${AVR_COMPILTER_PATH}/avr-size.exe)
+else
+OBJ_COPY =  avr-objcopy
+AVR_LINKER = avr-ar
+CPP_COMPILER = avr-g++
+C_COMPILER = avr-gcc
+AVR_SIZE = avr-size
+endif
 
 # Flags for compilation
 CXX_FLAGS = -c -g -Os -w -ffunction-sections -fdata-sections -MMD -mmcu=atmega1281 
