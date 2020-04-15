@@ -184,3 +184,6 @@ clean:
 
 monitor:
 	@pio device monitor -b 115200 -p ${MCU_PORT} 
+
+csv:
+	@python ./PlotSeries.py --port ${MCU_PORT}
