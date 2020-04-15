@@ -7,7 +7,7 @@ rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
 
 # Microcontroler for the Waspmote board 
 MMCU = atmega1281
-MCU_PORT ?= COM17
+MCU_PORT ?= COM20
 PROGRAMMER = stk500v1
 PROGRAMMER_BAUDRATE = 115200
 
@@ -20,18 +20,21 @@ CXX_INCLUDE_WASPMOTE_CORE = $(call ADD_COMMAS, -I${WASPMOTE_CORE_PATH})
 LIB_FOLD_INC = ${CC_LIBH_INC} ${CXX_INCLUDE_WASPMOTE_CORE}
 
 # Paths
+WASPMOTE_LIBRARIES_PATH = ./lib
+WASPMOTE_CORE_PATH = ./core
+WASPMOTE_AVRDUDE_CONF = ./avrdude.conf
 ifeq ($(OS),Windows_NT)
-WASPMOTE_PATH = C:/Users/jpolanco/Desktop/Hardware/Waspmote
+AVR_COMPILTER_PATH = C:/Users/lmora/.platformio/packages/toolchain-atmelavr/bin
 else
-WASPMOTE_PATH = /mnt/c/Users/jpolanco/Desktop/Hardware/Waspmote
+AVR_COMPILTER_PATH = /usr/bin
 endif
-WASPMOTE_LIBRARIES_PATH = ${WASPMOTE_PATH}/libraries
-WASPMOTE_CORE_PATH = ${WASPMOTE_PATH}/hardware/waspmote/avr/cores/waspmote-api
-WASPMOTE_AVRDUDE_CONF = ${WASPMOTE_PATH}/hardware/tools/avr/etc/avrdude.conf
-AVR_COMPILTER_PATH = C:/Users/jpolanco/.platformio/packages/toolchain-atmelavr/bin
 
 # Defines helpers
+ifeq ($(OS),Windows_NT)
+AVRDUDE = $(call ADD_COMMAS, C:/Users/lmora/.platformio/packages/tool-avrdude/avrdude.exe)
+else
 AVRDUDE = avrdude
+endif
 ifeq ($(OS),Windows_NT)
 OBJ_COPY =  $(call ADD_COMMAS, ${AVR_COMPILTER_PATH}/avr-objcopy.exe)
 AVR_LINKER = $(call ADD_COMMAS, ${AVR_COMPILTER_PATH}/avr-ar.exe)
@@ -180,10 +183,14 @@ update: build flash
 
 clean:
 	@echo ----- Borrando archivos temporales
+ifeq ($(OS),Windows_NT)
 	@del obj\*.o obj\*.d obj\*.a bin\*.eep bin\*.elf bin\*.hex
+else
+	@rm obj/*.o obj/*.d obj/*.a bin/*.eep bin/*.elf bin/*.hex
+endif
 
 monitor:
 	@pio device monitor -b 115200 -p ${MCU_PORT} 
-
+	
 csv:
 	@python ./PlotSeries.py --port ${MCU_PORT}
