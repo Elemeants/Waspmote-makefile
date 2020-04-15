@@ -205,7 +205,7 @@ float ionPotassiumVoltage[ION_NO_POINTS] = {
     ION_POTASSIUM_VOLTAGE_P3};
 
 GenericIonSensor calciumSensor(ION_SOCKET_A, ionCalciumVoltage, ionConcentrationPoints, ION_NO_POINTS);
-GenericIonSensor nitrateSensor(ION_SOCKET_B, ionNitrateVoltage, ionConcentrationPoints, ION_NO_POINTS);
+GenericIonSensor nitrateSensor(ION_SOCKET_C, ionNitrateVoltage, ionConcentrationPoints, ION_NO_POINTS);
 GenericIonSensor potassiumSensor(ION_SOCKET_D, ionPotassiumVoltage, ionConcentrationPoints, ION_NO_POINTS);
 
 GenericIonSensor *ionSensorsBus[NO_ION_SENSORS] = {&calciumSensor, &nitrateSensor, &potassiumSensor};
