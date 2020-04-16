@@ -7,7 +7,7 @@ rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(call rwildcard,$d/,$2))
 
 # Microcontroler for the Waspmote board 
 MMCU = atmega1281
-MCU_PORT ?= COM20
+MCU_PORT?=COM20
 PROGRAMMER = stk500v1
 PROGRAMMER_BAUDRATE = 115200
 
@@ -190,7 +190,7 @@ else
 endif
 
 monitor:
-	@pio device monitor -b 115200 -p ${MCU_PORT} 
-	
+	@python -m serial.tools.miniterm ${MCU_PORT} 115200
+
 csv:
 	@python ./PlotSeries.py --port ${MCU_PORT}

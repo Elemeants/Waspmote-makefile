@@ -7,5 +7,3 @@ sudo pip install pySerial numpy matplotlib argparse
 echo "Creando carpetas necesarias"
 sudo mkdir ./obj/
 sudo mkdir ./bin/
-echo "Includendo platformio al PATH"
-sudo ls -s $PIO_PATH /usr/bin/
