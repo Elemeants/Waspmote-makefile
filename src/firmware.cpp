@@ -101,8 +101,7 @@ void ionsProcessFunc(long);
 void addMeasureToArray(JsonArray &arr, float _measure, const __FlashStringHelper *code);
 void buildMeasuresJson();
 
-template <typename Tarray>
-void printArray(Tarray *array, uint8_t len);
+void printArray(float *array, uint8_t len);
 
 typedef enum
 {
@@ -114,11 +113,11 @@ typedef enum
 
 struct MeasuresInDate
 {
-  uint8_t date;
-  uint8_t month;
-  uint8_t year;
+  int date = 0;
+  int month = 0;
+  int year = 0;
 
-  uint8_t measures;
+  int measures = 0;
 };
 
 bool isEqual(MeasuresInDate m1, MeasuresInDate m2)
@@ -129,18 +128,18 @@ bool isEqual(MeasuresInDate m1, MeasuresInDate m2)
 void serializeUSB(MeasuresInDate measures)
 {
   USB.print(F(" Date: "));
-  USB.print(measures.year);
+  USB.print(measures.year, DEC);
   USB.print(F("/"));
-  USB.print(measures.month);
+  USB.print(measures.month, DEC);
   USB.print(F("/"));
-  USB.print(measures.date);
+  USB.print(measures.date, DEC);
   USB.print(F(" Measures: "));
-  USB.print(measures.measures);
+  USB.print(measures.measures, DEC);
 }
 
 class IonMeasuresPerDay
 {
-  const uint8_t eeprom_addr = 0x400;
+  const uint32_t eeprom_addr = 0xF00;
   MeasuresInDate _measureDate;
 
   void updateDateFromRTC()
@@ -168,11 +167,11 @@ public:
     updateDateFromRTC();
     MeasuresInDate storedData = readMeasureDate();
 #if !PYTHON_GRAPH_OUT_ENABLE
-    USB.print(F(" RTC info: "));
+    USB.print(F(" RTC info: ["));
     serializeUSB(_measureDate);
-    USB.print(" EEPROM: ");
+    USB.print(" ] EEPROM: [");
     serializeUSB(storedData);
-    USB.println();
+    USB.println(" ]");
 #endif
     if (isEqual(_measureDate, storedData))
     {
@@ -215,7 +214,7 @@ struct IonCalibrationPoints
     voltage_points[0] = voltage_points_1;
     voltage_points[1] = voltage_points_2;
     voltage_points[2] = voltage_points_3;
-    voltage_points[4] = voltage_points_3;
+    voltage_points[3] = voltage_points_3;
   }
 
   float *getPointsByMeasureIndex(uint8_t noMeasure)
@@ -228,16 +227,17 @@ struct IonCalibrationPoints
 #if !PYTHON_GRAPH_OUT_ENABLE
     USB.print(F("   Ion "));
     USB.print(ionName);
-    USB.print(F(" calibration poins: "));
+    USB.print(F(" calibration points: "));
     printArray(c_points, ION_NO_POINTS);
     USB.println(F(" ppm"));
 
     for (uint8_t i = 0; i < ION_NO_MEASURES; i++)
     {
-      USB.print(F(" Measure "));
-      USB.print(i);
+      USB.print(F("     Measure "));
+      USB.print(i, DEC);
       USB.print(F(": "));
       printArray(voltage_points[i], ION_NO_POINTS);
+      USB.println();
     }
 #endif
   }
@@ -284,7 +284,7 @@ public:
   static GenericIonSensor build(IonSocket_e socket, IonCalibrationPoints points)
   {
     uint8_t noMeasures = IonUtils.noMeasuresInDay();
-    GenericIonSensor sensor(socket, points.getPointsByMeasureIndex(noMeasures), ionConcentrationPoints, ION_NO_POINTS);
+    GenericIonSensor sensor(socket, points.getPointsByMeasureIndex(noMeasures), points.c_points, ION_NO_POINTS);
     return sensor;
   }
 };
@@ -486,6 +486,7 @@ void configure()
 #if !PYTHON_GRAPH_OUT_ENABLE
   USB.println(F("   Get time from 4G"));
   getTimeFrom4G();
+  // RTC.setTime(20, 04, 17, 0, 13, 54, 00);
   IonUtils.begin();
   calciumPoints.serializeCalibrationToUSB("Calcium");
   nitratePoints.serializeCalibrationToUSB("Nitrate");
@@ -629,13 +630,12 @@ void buildMeasuresJson()
   jsonDocument.clear();
 }
 
-template <typename Tarray>
-void printArray(Tarray *array, uint8_t len)
+void printArray(float *array, uint8_t len)
 {
   USB.print(F("[ "));
   for (uint8_t i = 0; i < len; i++)
   {
-    USB.print(array[i]);
+    USB.printFloat(array[i], 10);
     USB.print(F(" "));
   }
   USB.print(F("]"));
