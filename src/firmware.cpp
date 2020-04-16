@@ -3,24 +3,66 @@
 #include <smartWaterIons.h>
 #include <ArduinoJson.h>
 
-#define PYTHON_GRAPH_OUT_ENABLE true
+#define PYTHON_GRAPH_OUT_ENABLE false
+
+#define ION_NO_POINTS 3
+#define ION_NO_MEASURES 4
 
 #define CONCENTRATION_ION_POINT_1 0.5F
 #define CONCENTRATION_ION_POINT_2 150.0F
 #define CONCENTRATION_ION_POINT_3 2000.0F
-#define ION_NO_POINTS 3
 
-#define ION_CALCIUM_VOLTAGE_P1 2.7809031009F
-#define ION_CALCIUM_VOLTAGE_P2 3.5055961608F
-#define ION_CALCIUM_VOLTAGE_P3 3.7F
+// First measure of the day
+#define ION_CALCIUM_VOLTAGE_P1_M1 2.7809031009F
+#define ION_CALCIUM_VOLTAGE_P2_M1 3.5055961608F
+#define ION_CALCIUM_VOLTAGE_P3_M1 3.7F
 
-#define ION_NITRATE_VOLTAGE_P1 3.6902215480F
-#define ION_NITRATE_VOLTAGE_P2 3.6181249618F
-#define ION_NITRATE_VOLTAGE_P3 3.7F
+#define ION_NITRATE_VOLTAGE_P1_M1 3.6902215480F
+#define ION_NITRATE_VOLTAGE_P2_M1 3.6181249618F
+#define ION_NITRATE_VOLTAGE_P3_M1 3.7F
 
-#define ION_POTASSIUM_VOLTAGE_P1 3.1926817893F
-#define ION_POTASSIUM_VOLTAGE_P2 3.5151250362F
-#define ION_POTASSIUM_VOLTAGE_P3 3.7F
+#define ION_POTASSIUM_VOLTAGE_P1_M1 3.1926817893F
+#define ION_POTASSIUM_VOLTAGE_P2_M1 3.5151250362F
+#define ION_POTASSIUM_VOLTAGE_P3_M1 3.7F
+
+// Second measure of the day
+#define ION_CALCIUM_VOLTAGE_P1_M2 2.7809031009F
+#define ION_CALCIUM_VOLTAGE_P2_M2 3.5055961608F
+#define ION_CALCIUM_VOLTAGE_P3_M2 3.7F
+
+#define ION_NITRATE_VOLTAGE_P1_M2 3.6902215480F
+#define ION_NITRATE_VOLTAGE_P2_M2 3.6181249618F
+#define ION_NITRATE_VOLTAGE_P3_M2 3.7F
+
+#define ION_POTASSIUM_VOLTAGE_P1_M2 3.1926817893F
+#define ION_POTASSIUM_VOLTAGE_P2_M2 3.5151250362F
+#define ION_POTASSIUM_VOLTAGE_P3_M2 3.7F
+
+// Third measure of the day
+#define ION_CALCIUM_VOLTAGE_P1_M3 2.7809031009F
+#define ION_CALCIUM_VOLTAGE_P2_M3 3.5055961608F
+#define ION_CALCIUM_VOLTAGE_P3_M3 3.7F
+
+#define ION_NITRATE_VOLTAGE_P1_M3 3.6902215480F
+#define ION_NITRATE_VOLTAGE_P2_M3 3.6181249618F
+#define ION_NITRATE_VOLTAGE_P3_M3 3.7F
+
+#define ION_POTASSIUM_VOLTAGE_P1_M3 3.1926817893F
+#define ION_POTASSIUM_VOLTAGE_P2_M3 3.5151250362F
+#define ION_POTASSIUM_VOLTAGE_P3_M3 3.7F
+
+// Four measure of the day
+#define ION_CALCIUM_VOLTAGE_P1_M4 2.7809031009F
+#define ION_CALCIUM_VOLTAGE_P2_M4 3.5055961608F
+#define ION_CALCIUM_VOLTAGE_P3_M4 3.7F
+
+#define ION_NITRATE_VOLTAGE_P1_M4 3.6902215480F
+#define ION_NITRATE_VOLTAGE_P2_M4 3.6181249618F
+#define ION_NITRATE_VOLTAGE_P3_M4 3.7F
+
+#define ION_POTASSIUM_VOLTAGE_P1_M4 3.1926817893F
+#define ION_POTASSIUM_VOLTAGE_P2_M4 3.5151250362F
+#define ION_POTASSIUM_VOLTAGE_P3_M4 3.7F
 
 #define NO_ION_SENSORS 3
 
@@ -38,10 +80,15 @@
 char http_data[512];
 
 #define CONCENTRATION_CALCULATION_MINUTES 30
+
 #define SECONDS_TO_MILIS(milis) (milis * 1000.0f)
 #define MINUTES_TO_SECONDS(min) (min * 60.0f)
-
 #define MINUTES_TO_MILLIS(min) (SECONDS_TO_MILIS(MINUTES_TO_SECONDS(min)))
+
+float ionConcentrationPoints[ION_NO_POINTS] = {
+    CONCENTRATION_ION_POINT_1,
+    CONCENTRATION_ION_POINT_2,
+    CONCENTRATION_ION_POINT_3};
 
 void configure();
 void updateTime();
@@ -54,6 +101,9 @@ void ionsProcessFunc(long);
 void addMeasureToArray(JsonArray &arr, float _measure, const __FlashStringHelper *code);
 void buildMeasuresJson();
 
+template <typename Tarray>
+void printArray(Tarray *array, uint8_t len);
+
 typedef enum
 {
   ION_SOCKET_A = SOCKETA,
@@ -61,6 +111,137 @@ typedef enum
   ION_SOCKET_C = SOCKETC,
   ION_SOCKET_D = SOCKETD,
 } IonSocket_e;
+
+struct MeasuresInDate
+{
+  uint8_t date;
+  uint8_t month;
+  uint8_t year;
+
+  uint8_t measures;
+};
+
+bool isEqual(MeasuresInDate m1, MeasuresInDate m2)
+{
+  return m1.year == m2.year && m1.month == m2.month && m1.date == m2.date;
+}
+
+void serializeUSB(MeasuresInDate measures)
+{
+  USB.print(F(" Date: "));
+  USB.print(measures.year);
+  USB.print(F("/"));
+  USB.print(measures.month);
+  USB.print(F("/"));
+  USB.print(measures.date);
+  USB.print(F(" Measures: "));
+  USB.print(measures.measures);
+}
+
+class IonMeasuresPerDay
+{
+  const uint8_t eeprom_addr = 0x400;
+  MeasuresInDate _measureDate;
+
+  void updateDateFromRTC()
+  {
+    _measureDate.year = RTC.year;
+    _measureDate.month = RTC.month;
+    _measureDate.date = RTC.date;
+  }
+
+  void saveMeasureDate()
+  {
+    Utils.writeBlockEEPROM(eeprom_addr, (void *)&_measureDate, sizeof(MeasuresInDate));
+  }
+
+  MeasuresInDate readMeasureDate()
+  {
+    MeasuresInDate storedData;
+    Utils.readBlockEEPROM(eeprom_addr, (void *)&storedData, sizeof(MeasuresInDate));
+    return storedData;
+  }
+
+public:
+  uint8_t begin()
+  {
+    updateDateFromRTC();
+    MeasuresInDate storedData = readMeasureDate();
+#if !PYTHON_GRAPH_OUT_ENABLE
+    USB.print(F(" RTC info: "));
+    serializeUSB(_measureDate);
+    USB.print(" EEPROM: ");
+    serializeUSB(storedData);
+    USB.println();
+#endif
+    if (isEqual(_measureDate, storedData))
+    {
+      _measureDate.measures = storedData.measures;
+      _measureDate.measures++;
+    }
+    else
+    {
+      _measureDate.measures = 0;
+    }
+    saveMeasureDate();
+#if !PYTHON_GRAPH_OUT_ENABLE
+    USB.print(F(" Result: "));
+    serializeUSB(_measureDate);
+    USB.println();
+#endif
+  }
+
+  uint8_t noMeasuresInDay()
+  {
+    return _measureDate.measures;
+  }
+};
+
+IonMeasuresPerDay IonUtils;
+
+struct IonCalibrationPoints
+{
+  float *voltage_points[ION_NO_MEASURES];
+  float *c_points;
+
+  IonCalibrationPoints(
+      float voltage_points_1[ION_NO_POINTS],
+      float voltage_points_2[ION_NO_POINTS],
+      float voltage_points_3[ION_NO_POINTS],
+      float voltage_points_4[ION_NO_POINTS],
+      float _c_points[ION_NO_POINTS])
+  {
+    c_points = _c_points;
+    voltage_points[0] = voltage_points_1;
+    voltage_points[1] = voltage_points_2;
+    voltage_points[2] = voltage_points_3;
+    voltage_points[4] = voltage_points_3;
+  }
+
+  float *getPointsByMeasureIndex(uint8_t noMeasure)
+  {
+    return voltage_points[noMeasure % ION_NO_MEASURES];
+  }
+
+  void serializeCalibrationToUSB(const char *ionName)
+  {
+#if !PYTHON_GRAPH_OUT_ENABLE
+    USB.print(F("   Ion "));
+    USB.print(ionName);
+    USB.print(F(" calibration poins: "));
+    printArray(c_points, ION_NO_POINTS);
+    USB.println(F(" ppm"));
+
+    for (uint8_t i = 0; i < ION_NO_MEASURES; i++)
+    {
+      USB.print(F(" Measure "));
+      USB.print(i);
+      USB.print(F(": "));
+      printArray(voltage_points[i], ION_NO_POINTS);
+    }
+#endif
+  }
+};
 
 class GenericIonSensor
 {
@@ -94,6 +275,17 @@ public:
   float voltage() const
   {
     return _voltage;
+  }
+};
+
+class GenericIonSensorFactory
+{
+public:
+  static GenericIonSensor build(IonSocket_e socket, IonCalibrationPoints points)
+  {
+    uint8_t noMeasures = IonUtils.noMeasuresInDay();
+    GenericIonSensor sensor(socket, points.getPointsByMeasureIndex(noMeasures), ionConcentrationPoints, ION_NO_POINTS);
+    return sensor;
   }
 };
 
@@ -187,27 +379,66 @@ public:
   }
 };
 
-float ionConcentrationPoints[ION_NO_POINTS] = {
-    CONCENTRATION_ION_POINT_1,
-    CONCENTRATION_ION_POINT_2,
-    CONCENTRATION_ION_POINT_3};
-float ionCalciumVoltage[ION_NO_POINTS] = {
-    ION_CALCIUM_VOLTAGE_P1,
-    ION_CALCIUM_VOLTAGE_P2,
-    ION_CALCIUM_VOLTAGE_P3};
-float ionNitrateVoltage[ION_NO_POINTS] = {
-    ION_NITRATE_VOLTAGE_P1,
-    ION_NITRATE_VOLTAGE_P2,
-    ION_NITRATE_VOLTAGE_P3};
-float ionPotassiumVoltage[ION_NO_POINTS] = {
-    ION_POTASSIUM_VOLTAGE_P1,
-    ION_POTASSIUM_VOLTAGE_P2,
-    ION_POTASSIUM_VOLTAGE_P3};
+float ionCalciumVoltage_m1[ION_NO_POINTS] = {
+    ION_CALCIUM_VOLTAGE_P1_M1,
+    ION_CALCIUM_VOLTAGE_P2_M1,
+    ION_CALCIUM_VOLTAGE_P3_M1};
+float ionCalciumVoltage_m2[ION_NO_POINTS] = {
+    ION_CALCIUM_VOLTAGE_P1_M2,
+    ION_CALCIUM_VOLTAGE_P2_M2,
+    ION_CALCIUM_VOLTAGE_P3_M2};
+float ionCalciumVoltage_m3[ION_NO_POINTS] = {
+    ION_CALCIUM_VOLTAGE_P1_M3,
+    ION_CALCIUM_VOLTAGE_P2_M3,
+    ION_CALCIUM_VOLTAGE_P3_M3};
+float ionCalciumVoltage_m4[ION_NO_POINTS] = {
+    ION_CALCIUM_VOLTAGE_P1_M4,
+    ION_CALCIUM_VOLTAGE_P2_M4,
+    ION_CALCIUM_VOLTAGE_P3_M4};
 
-GenericIonSensor calciumSensor(ION_SOCKET_A, ionCalciumVoltage, ionConcentrationPoints, ION_NO_POINTS);
-GenericIonSensor nitrateSensor(ION_SOCKET_C, ionNitrateVoltage, ionConcentrationPoints, ION_NO_POINTS);
-GenericIonSensor potassiumSensor(ION_SOCKET_D, ionPotassiumVoltage, ionConcentrationPoints, ION_NO_POINTS);
+float ionNitrateVoltage_m1[ION_NO_POINTS] = {
+    ION_NITRATE_VOLTAGE_P1_M1,
+    ION_NITRATE_VOLTAGE_P2_M1,
+    ION_NITRATE_VOLTAGE_P3_M1};
+float ionNitrateVoltage_m2[ION_NO_POINTS] = {
+    ION_NITRATE_VOLTAGE_P1_M2,
+    ION_NITRATE_VOLTAGE_P2_M2,
+    ION_NITRATE_VOLTAGE_P3_M2};
+float ionNitrateVoltage_m3[ION_NO_POINTS] = {
+    ION_NITRATE_VOLTAGE_P1_M3,
+    ION_NITRATE_VOLTAGE_P2_M3,
+    ION_NITRATE_VOLTAGE_P3_M3};
+float ionNitrateVoltage_m4[ION_NO_POINTS] = {
+    ION_NITRATE_VOLTAGE_P1_M4,
+    ION_NITRATE_VOLTAGE_P2_M4,
+    ION_NITRATE_VOLTAGE_P3_M4};
 
+float ionPotassiumVoltage_m1[ION_NO_POINTS] = {
+    ION_POTASSIUM_VOLTAGE_P1_M1,
+    ION_POTASSIUM_VOLTAGE_P2_M1,
+    ION_POTASSIUM_VOLTAGE_P3_M1};
+float ionPotassiumVoltage_m2[ION_NO_POINTS] = {
+    ION_POTASSIUM_VOLTAGE_P1_M2,
+    ION_POTASSIUM_VOLTAGE_P2_M2,
+    ION_POTASSIUM_VOLTAGE_P3_M2};
+float ionPotassiumVoltage_m3[ION_NO_POINTS] = {
+    ION_POTASSIUM_VOLTAGE_P1_M3,
+    ION_POTASSIUM_VOLTAGE_P2_M3,
+    ION_POTASSIUM_VOLTAGE_P3_M3};
+float ionPotassiumVoltage_m4[ION_NO_POINTS] = {
+    ION_POTASSIUM_VOLTAGE_P1_M4,
+    ION_POTASSIUM_VOLTAGE_P2_M4,
+    ION_POTASSIUM_VOLTAGE_P3_M4};
+
+IonCalibrationPoints calciumPoints(ionCalciumVoltage_m1, ionCalciumVoltage_m2, ionCalciumVoltage_m3, ionCalciumVoltage_m4, ionConcentrationPoints);
+IonCalibrationPoints nitratePoints(ionNitrateVoltage_m1, ionNitrateVoltage_m2, ionNitrateVoltage_m3, ionNitrateVoltage_m4, ionConcentrationPoints);
+IonCalibrationPoints potassiumPoints(ionPotassiumVoltage_m1, ionPotassiumVoltage_m2, ionPotassiumVoltage_m3, ionPotassiumVoltage_m4, ionConcentrationPoints);
+
+GenericIonSensor calciumSensor = GenericIonSensorFactory::build(ION_SOCKET_A, calciumPoints);
+GenericIonSensor nitrateSensor = GenericIonSensorFactory::build(ION_SOCKET_D, nitratePoints);
+GenericIonSensor potassiumSensor = GenericIonSensorFactory::build(ION_SOCKET_B, potassiumPoints);
+
+IonCalibrationPoints *ionMeasureCalibrationPoints[NO_ION_SENSORS] = {&calciumPoints, &nitratePoints, &potassiumPoints};
 GenericIonSensor *ionSensorsBus[NO_ION_SENSORS] = {&calciumSensor, &nitrateSensor, &potassiumSensor};
 
 StaticJsonDocument<1024> jsonDocument;
@@ -255,6 +486,10 @@ void configure()
 #if !PYTHON_GRAPH_OUT_ENABLE
   USB.println(F("   Get time from 4G"));
   getTimeFrom4G();
+  IonUtils.begin();
+  calciumPoints.serializeCalibrationToUSB("Calcium");
+  nitratePoints.serializeCalibrationToUSB("Nitrate");
+  potassiumPoints.serializeCalibrationToUSB("Potassium");
 #endif
 }
 
@@ -291,9 +526,17 @@ void sendDataToServer()
 
 void getTimeFrom4G()
 {
-  timeoutFunction(MINUTES_TO_MILLIS(1), [](long time) -> bool {
-    return !_4G.checkConnection(1);
+  bool isConnected = timeoutFunction(MINUTES_TO_MILLIS(1), [](long time) -> bool {
+    return _4G.checkConnection(1);
   });
+  if (!isConnected)
+  {
+    while (1)
+    {
+      USB.println("Can't connect please reset ION device");
+      delay(1000);
+    }
+  }
   _4G.setTimeFrom4G();
 }
 
@@ -384,4 +627,16 @@ void buildMeasuresJson()
 
   serializeJson(jsonDocument, http_data);
   jsonDocument.clear();
+}
+
+template <typename Tarray>
+void printArray(Tarray *array, uint8_t len)
+{
+  USB.print(F("[ "));
+  for (uint8_t i = 0; i < len; i++)
+  {
+    USB.print(array[i]);
+    USB.print(F(" "));
+  }
+  USB.print(F("]"));
 }
